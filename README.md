@@ -12,7 +12,7 @@ python -m pytest                # 41 tests
 ## The report card (start here)
 
 One command turns a price history into a single plain-English web page: a green / yellow / red verdict,
-six checks explained in everyday language, and two charts. No statistics background needed to read it.
+seven checks explained in everyday language, and two charts. No statistics background needed to read it.
 
 ```
 python -m quantkit demo --open                              # offline, synthetic prices
@@ -24,11 +24,12 @@ Options: `--strategy sma | momentum | meanrev`, `--cost-bps`, `--split` (share o
 | Check | Question it answers |
 |---|---|
 | Makes money after costs | Is there a profit on data the strategy never saw? |
+| Beats just holding | Did it add value over simply holding the asset, in risk-adjusted terms or by a much smoother ride? |
 | Distinguishable from luck | How confident can we be the edge is real? (stricter when many tickers are screened) |
 | Held up on unseen data | Did the edge survive after the settings were chosen? |
 | Costs don't eat the edge | How much of the edge is left after trading costs? |
 | Losses stay tolerable | Is the worst fall within your limit? |
-| Not suspiciously smooth | Does the curve look like real trading, or too good to be true? |
+| Not suspiciously smooth | An almost straight curve AND an unusually high Sharpe is a red flag (a rising market alone is not) |
 
 How it stays honest: every strategy's settings are chosen on the first 70% of history only, and the verdict is judged on the last 30%.
 A green verdict means "worth testing further", never "safe to trade".

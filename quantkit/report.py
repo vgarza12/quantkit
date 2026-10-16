@@ -41,6 +41,7 @@ def analyze_ticker(prices: pd.Series, ticker: str, strategy: str = "sma", cost_b
     bh = prices.pct_change().reindex(net.index).fillna(0.0)
 
     s_is, s_oos = m.summary(is_net, ppy), m.summary(oos_net, ppy)
+    s_full, bh_s = m.summary(net, ppy), m.summary(bh.iloc[cut:], ppy)
     n_oos = len(oos_net)
     psr = se.prob_sharpe(oos_net)
     dec = decay.compare(is_net, oos_net, ppy)
@@ -60,6 +61,9 @@ def analyze_ticker(prices: pd.Series, ticker: str, strategy: str = "sma", cost_b
     checks.append(dict(key="money", title="Makes money after costs", status=st, value=f"Sharpe {_f(net_sr)}",
         explain=f"On history the strategy never saw, it earned {_pct(s_oos['ann_return'])} a year after trading costs, "
                 f"with a Sharpe ratio of {_f(net_sr)} (return per unit of risk; above 0.5 is decent, above 1 is strong)."))
+
+    st, msg = beats_holding_status(net_sr, bh_s["sharpe"], abs(s_oos["max_drawdown"]), abs(bh_s["max_drawdown"]), ticker)
+    checks.append(dict(key="beats", title="Beats just holding", status=st, value=f"Sharpe {_f(net_sr)} vs {_f(bh_s['sharpe'])}", explain=msg))
 
     st = PASS if psr >= bar_hi else WARN if psr >= bar_lo else FAIL
     if st == PASS and n_oos < 250:
@@ -91,10 +95,9 @@ def analyze_ticker(prices: pd.Series, ticker: str, strategy: str = "sma", cost_b
         explain=f"The worst fall from a peak on unseen data was {_pct(mdd)} (limit set: {_pct(max_dd, 0)}). "
                 f"The longest stretch without a new high was {_duration(s_oos['longest_drawdown_periods'])}."))
 
-    st = FAIL if smooth > 0.98 else PASS
-    checks.append(dict(key="smooth", title="Not suspiciously smooth", status=st, value=f"smoothness {_f(smooth)}",
-        explain=("The return curve is almost a perfect straight line, which real trading essentially never produces. Check for hindsight or data errors."
-                 if st == FAIL else "The return curve has the ups and downs real trading has. A near-perfect straight line would be a red flag.")))
+    st, msg = smoothness_status(smooth, s_full["sharpe"])
+    checks.append(dict(key="smooth", title="Not suspiciously smooth", status=st,
+                       value=f"smoothness {_f(smooth)}", explain=msg))
 
     return dict(ticker=ticker, strategy=strategy, res=res, net=net, gross=gross, bh=bh, cut=cut, checks=checks,
                 s_is=s_is, s_oos=s_oos, s_full=m.summary(net, ppy), bh_oos=m.summary(bh.iloc[cut:], ppy),
@@ -117,6 +120,36 @@ def held_up_status(dec: dict, is_sharpe: float) -> tuple[str, str]:
                           "Worth checking what happened then and whether it could happen again.")
         return WARN, "Unseen-data performance is on the weak side of what the earlier results would suggest."
     return PASS, "Unseen-data performance is in line with what the earlier results would suggest."
+
+
+def beats_holding_status(net_sr: float, bh_sr: float, mdd: float, bh_mdd: float, ticker: str) -> tuple[str, str]:
+    """Does the strategy add value over simply holding the asset? (unseen data, after costs)"""
+    if not (np.isfinite(net_sr) and np.isfinite(bh_sr)):
+        return FAIL, "There was not enough variation in returns to compare the strategy with simply holding."
+    nums = (f"Sharpe {_f(net_sr)} vs {_f(bh_sr)} for holding {ticker}; "
+            f"worst fall {_pct(mdd)} vs {_pct(bh_mdd)}.")
+    diff = net_sr - bh_sr
+    if diff >= 0.1:
+        return PASS, f"It earned more per unit of risk than simply holding. {nums}"
+    if diff >= -0.1:
+        return WARN, f"It roughly matched simply holding, so the extra effort adds little. {nums}"
+    if bh_mdd > 0 and mdd <= 0.7 * bh_mdd:
+        return WARN, f"It earned less per unit of risk than holding, but gave a much smoother ride. {nums}"
+    return FAIL, f"Simply holding {ticker} did as well or better with no effort, so the strategy added no clear value. {nums}"
+
+
+def smoothness_status(smooth: float, sharpe: float) -> tuple[str, str]:
+    """Flag 'too good to be true': an almost straight equity curve AND an unusually high Sharpe.
+
+    A steadily rising market alone produces a fairly straight curve, so smoothness by itself is not suspicious.
+    """
+    too_smooth = np.isfinite(smooth) and smooth > 0.98
+    too_good = (not np.isfinite(sharpe)) or sharpe > 2.5
+    if too_smooth and too_good:
+        return FAIL, ("The return curve is almost a straight line with an unusually high Sharpe, which real trading essentially never produces. "
+                      "Check for hindsight bias or data errors.")
+    return PASS, ("The return curve has the ups and downs real trading has. "
+                  "An almost perfectly straight line combined with a Sharpe above about 2.5 would be a red flag.")
 
 
 def verdict(checks: list[dict]) -> tuple[str, str, str]:
@@ -241,7 +274,7 @@ def _ticker_section(r: dict, split_pct: int) -> str:
 Settings chosen from {r['res']['n_trials']} variations using only the first {split_pct}% of history ({html.escape(r['res']['best_key'])}).
 Because the best of several tries always looks flattering, the verdict is judged on the last {100 - split_pct}%, which played no part in choosing.</p>
 <div class="cards">{cards}</div>
-<h3>The six checks</h3>{checks}
+<h3>The seven checks</h3>{checks}
 <h3>Growth of $1</h3>{svg_chart({'Strategy (after costs)': eq, 'Just holding': bheq}, split_at=r['cut'])}
 <h3>Losses from the previous high</h3>{svg_chart({'Strategy': dd}, split_at=r['cut'], fmt=lambda v: _pct(v, 0))}
 </section>"""

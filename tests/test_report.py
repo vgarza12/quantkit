@@ -45,7 +45,7 @@ def test_too_little_data_raises_clear_error():
 
 def test_verdict_rules():
     ok = lambda k, s: {"key": k, "status": s}
-    keys = ["money", "luck", "held_up", "costs", "risk", "smooth"]
+    keys = ["money", "beats", "luck", "held_up", "costs", "risk", "smooth"]
     assert report.verdict([ok(k, "pass") for k in keys])[0] == "green"
     assert report.verdict([ok(k, "pass") if k != "risk" else ok(k, "warn") for k in keys])[0] == "yellow"
     assert report.verdict([ok(k, "pass") if k != "luck" else ok(k, "fail") for k in keys])[0] == "red"
@@ -56,10 +56,10 @@ def test_verdict_rules():
 def test_report_builds_valid_html_with_all_sections():
     page, results = report.build_report(data.synthetic_prices(seed=0))
     assert page.startswith("<!doctype html>") and page.count("<svg") >= 6
-    for needle in ["The six checks", "Combining them", "glossary", "cannot tell you", "Summary"]:
+    for needle in ["The seven checks", "Combining them", "glossary", "cannot tell you", "Summary"]:
         assert needle in page
     assert "nan" not in page.lower().replace("financial", "")
-    assert len(results) == 3 and all(len(r["checks"]) == 6 for r in results)
+    assert len(results) == 3 and all(len(r["checks"]) == 7 for r in results)
 
 
 def test_html_escapes_ticker_names():
@@ -118,3 +118,26 @@ def test_held_up_message_matches_reason():
     assert "weak side" in report.held_up_status(weak, 0.4)[1]
     assert report.held_up_status({"verdict": "consistent", "live_percentile_vs_backtest": 0.5}, 0.4)[0] == "pass"
     assert report.held_up_status({"verdict": "decayed", "live_percentile_vs_backtest": 0.01}, 0.4)[0] == "fail"
+
+
+def test_beats_holding_branches():
+    f = report.beats_holding_status
+    assert f(1.2, 0.8, 0.10, 0.25, "X")[0] == "pass"
+    assert f(0.8, 0.85, 0.10, 0.25, "X")[0] == "warn"               # roughly matched
+    assert f(0.5, 0.9, 0.10, 0.30, "X")[0] == "warn"               # less Sharpe but much smoother
+    assert f(0.5, 0.9, 0.28, 0.30, "X")[0] == "fail"               # worse on both counts
+    assert f(float("nan"), 0.9, 0.1, 0.2, "X")[0] == "fail"
+
+
+def test_smoothness_needs_high_sharpe_too():
+    f = report.smoothness_status
+    assert f(0.97, 1.1)[0] == "pass"                                # trending market, ordinary Sharpe
+    assert f(0.99, 1.1)[0] == "pass"                                # straight-ish but not too good
+    assert f(0.99, 3.5)[0] == "fail"                                # straight AND implausibly good
+    assert f(0.99, float("nan"))[0] == "fail"                       # zero variance
+
+
+def test_buy_and_hold_comparison_appears_in_report():
+    page, results = report.build_report(data.synthetic_prices(seed=0))
+    assert "Beats just holding" in page
+    assert all(any(c["key"] == "beats" for c in r["checks"]) for r in results)
