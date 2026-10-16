@@ -108,3 +108,13 @@ def test_never_trading_strategy_does_not_break_report():
         warnings.simplefilter("error")                    # any numeric warning fails the test
         page, results = report.build_report(P, strategy="momentum")
     assert "DOWN" in page and len(results) == 4
+
+
+def test_held_up_message_matches_reason():
+    base = {"verdict": "watch", "live_percentile_vs_backtest": 0.9, "cusum_alarm_index": 12, "cusum_alarm_date": "2023-03-14"}
+    st_, msg = report.held_up_status(base, is_sharpe=0.4)            # better overall, but a sudden drop
+    assert st_ == "warn" and "sudden sharp drop" in msg and "2023-03-14" in msg and "weak side" not in msg
+    weak = {"verdict": "watch", "live_percentile_vs_backtest": 0.08, "cusum_alarm_index": None, "cusum_alarm_date": None}
+    assert "weak side" in report.held_up_status(weak, 0.4)[1]
+    assert report.held_up_status({"verdict": "consistent", "live_percentile_vs_backtest": 0.5}, 0.4)[0] == "pass"
+    assert report.held_up_status({"verdict": "decayed", "live_percentile_vs_backtest": 0.01}, 0.4)[0] == "fail"

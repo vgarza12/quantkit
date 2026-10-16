@@ -70,17 +70,7 @@ def analyze_ticker(prices: pd.Series, ticker: str, strategy: str = "sma", cost_b
         explain=f"Judging only by unseen data ({n_oos} days), there is a {psr * 100:.0f}% chance the strategy's true edge is positive. "
                 f"The usual bar is 95%.{extra}{short}"))
 
-    pctile = dec["live_percentile_vs_backtest"]
-    if dec["verdict"] == "no_data":
-        st, msg = FAIL, "The strategy made no trades (or its returns never varied) on unseen data, so there is nothing to test."
-    elif dec["verdict"] == "decayed":
-        st, msg = FAIL, "Performance on unseen data is much worse than when the settings were chosen: a sign the earlier result was partly luck or the edge faded."
-    elif s_is["sharpe"] <= 0:
-        st, msg = WARN, "Even the best-looking settings showed no edge in the earlier period. A good result only on unseen data is usually luck."
-    elif dec["verdict"] == "watch":
-        st, msg = WARN, "Unseen-data performance is on the weak side of what the earlier results would suggest."
-    else:
-        st, msg = PASS, "Unseen-data performance is in line with what the earlier results would suggest."
+    st, msg = held_up_status(dec, s_is["sharpe"])
     checks.append(dict(key="held_up", title="Held up on unseen data", status=st,
         value=f"{_f(s_is['sharpe'])} → {_f(net_sr)}",
         explain=f"Sharpe was {_f(s_is['sharpe'])} when settings were chosen and {_f(net_sr)} afterwards. {msg}"))
@@ -109,6 +99,24 @@ def analyze_ticker(prices: pd.Series, ticker: str, strategy: str = "sma", cost_b
     return dict(ticker=ticker, strategy=strategy, res=res, net=net, gross=gross, bh=bh, cut=cut, checks=checks,
                 s_is=s_is, s_oos=s_oos, s_full=m.summary(net, ppy), bh_oos=m.summary(bh.iloc[cut:], ppy),
                 dsr_full=dsr_full, verdict=verdict(checks), oos_net=oos_net, cost_bps=cost_bps, split=split)
+
+
+def held_up_status(dec: dict, is_sharpe: float) -> tuple[str, str]:
+    """Status and plain-English message for the 'held up on unseen data' check."""
+    pct = dec["live_percentile_vs_backtest"]
+    if dec["verdict"] == "no_data":
+        return FAIL, "The strategy made no trades (or its returns never varied) on unseen data, so there is nothing to test."
+    if dec["verdict"] == "decayed":
+        return FAIL, "Performance on unseen data is much worse than when the settings were chosen: a sign the earlier result was partly luck or the edge faded."
+    if is_sharpe <= 0:
+        return WARN, "Even the best-looking settings showed no edge in the earlier period. A good result only on unseen data is usually luck."
+    if dec["verdict"] == "watch":
+        if np.isfinite(pct) and pct >= 0.15 and dec.get("cusum_alarm_index") is not None:
+            when = str(dec.get("cusum_alarm_date"))[:10]
+            return WARN, (f"Overall it did at least as well as before, but returns suffered a sudden sharp drop around {when}. "
+                          "Worth checking what happened then and whether it could happen again.")
+        return WARN, "Unseen-data performance is on the weak side of what the earlier results would suggest."
+    return PASS, "Unseen-data performance is in line with what the earlier results would suggest."
 
 
 def verdict(checks: list[dict]) -> tuple[str, str, str]:
