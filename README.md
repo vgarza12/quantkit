@@ -64,3 +64,17 @@ A green verdict means "worth testing further", never "safe to trade".
 
 ## Extending it
 Real broker adapter (subclass `Broker`), futures/FX cost models in `execution.apply_costs`, regime-conditional reporting, and a tear-sheet plot on top of `metrics.summary`.
+
+## Example results on real data
+
+Run on 2026-10-15 with Yahoo Finance prices from 2015-01-01, using the moving-average trend strategy, 2 bp trading costs, settings chosen on the first 70% of history and judged on the last 30% (about 3.5 years).
+
+| Ticker | Verdict | Sharpe (unseen) | Sharpe, just holding | Worst fall | Confidence edge is real |
+|---|---|---|---|---|---|
+| SPY | Promising | 1.46 | 1.34 | 8.4% | 100% |
+| QQQ | Mixed | 0.93 | 1.20 | 19.4% | 95% |
+| GLD | Mixed | 1.20 | 1.22 | 24.5% | 98% |
+
+What this shows: the tool separates a strategy that looked good (SPY) from one that earned less than simply holding (QQQ) and one that added little (GLD). Verdicts are computed only on data the settings never saw.
+
+What it does not show: a proven edge. SPY beats holding by 0.12 Sharpe, a small margin against a pass threshold of 0.1 that is itself a judgement call. The sample is about 3.5 years, one strategy family, three assets, and results change as new data arrives. Treat "Promising" as a reason to test further, not to trade.
