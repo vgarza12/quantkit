@@ -50,3 +50,20 @@ def load_returns_csv(path: str, col: str | None = None) -> pd.Series:
     """CSV with a date column first and one or more return columns."""
     df = pd.read_csv(path, index_col=0, parse_dates=True)
     return df[col] if col else df.iloc[:, 0]
+
+
+def synthetic_prices(n_assets: int = 3, n: int = 2500, seed: int = 0) -> pd.DataFrame:
+    """Offline demo prices: assets drift up/down in persistent regimes; the last one is pure noise."""
+    rng = np.random.default_rng(seed)
+    idx = pd.bdate_range("2015-01-01", periods=n)
+    cols = {}
+    for i in range(n_assets):
+        noise_only = i == n_assets - 1
+        regime, rets = 1, []
+        for _ in range(n):
+            if rng.random() > 0.99:
+                regime = -regime
+            mu = 0.0 if noise_only else (0.0007 if regime > 0 else -0.0005)
+            rets.append(rng.normal(mu, 0.01))
+        cols[f"DEMO_{'NOISE' if noise_only else chr(65 + i)}"] = 100 * np.cumprod(1 + np.array(rets))
+    return pd.DataFrame(cols, index=idx)

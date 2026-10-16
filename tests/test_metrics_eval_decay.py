@@ -25,6 +25,7 @@ def test_zero_edge_noise_gets_low_psr():
     assert se.prob_sharpe(r) < 0.95
 
 
+@pytest.mark.filterwarnings("ignore:Precision loss")
 def test_perfectly_smooth_curve_is_flagged():
     r = pd.Series(np.full(300, 0.001))
     assert "too_smooth" in se.evaluate(r)["flags"]

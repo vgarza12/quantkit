@@ -6,13 +6,39 @@ Six small, tested tools that answer one question a systematic trading team keeps
 ```
 pip install -r requirements.txt
 python examples/run_demo.py     # all six on synthetic data, no data subscription needed
-python -m pytest                # 28 tests
+python -m pytest                # 41 tests
 ```
+
+## The report card (start here)
+
+One command turns a price history into a single plain-English web page: a green / yellow / red verdict,
+six checks explained in everyday language, and two charts. No statistics background needed to read it.
+
+```
+python -m quantkit demo --open                              # offline, synthetic prices
+python -m quantkit report --tickers SPY QQQ --open          # real prices (pip install yfinance first)
+python -m quantkit report --csv prices.csv --strategy momentum --cost-bps 3 --max-dd 0.15
+```
+Options: `--strategy sma | momentum | meanrev`, `--cost-bps`, `--split` (share of history used to choose settings), `--max-dd`, `--out`.
+
+| Check | Question it answers |
+|---|---|
+| Makes money after costs | Is there a profit on data the strategy never saw? |
+| Distinguishable from luck | How confident can we be the edge is real? (stricter when many tickers are screened) |
+| Held up on unseen data | Did the edge survive after the settings were chosen? |
+| Costs don't eat the edge | How much of the edge is left after trading costs? |
+| Losses stay tolerable | Is the worst fall within your limit? |
+| Not suspiciously smooth | Does the curve look like real trading, or too good to be true? |
+
+How it stays honest: every strategy's settings are chosen on the first 70% of history only, and the verdict is judged on the last 30%.
+A green verdict means "worth testing further", never "safe to trade".
+
+## The six building blocks
 
 | # | Module | What it does | Why it matters |
 |---|--------|--------------|----------------|
 | 1 | `strategy_eval.py` | Scores and ranks strategies; Probabilistic and **Deflated** Sharpe (penalizes screening many strategies), IS/OOS split, "too smooth" check | Picking the best of many strategies is exactly how backtest overfitting happens |
-| 2 | `decay.py` | Compares live to backtest using a block bootstrap and a CUSUM detector | Separates "bad patch" from "stopped working" |
+| 2 | `decay.py` | Compares live to backtest using a block bootstrap (verdict) plus a CUSUM detector for sudden breakdowns | Separates "bad patch" from "stopped working" |
 | 3 | `portfolio.py` | Equal-weight, inverse-vol, min-variance, risk parity, max-Sharpe, all **walk-forward**; effective-bets diversification measure | Correlated strategies are often one bet in disguise |
 | 4 | `execution.py` | Slippage (bps), latency, fill rate; shows how much of a backtest's edge costs remove | Execution quality is part of the strategy's return |
 | 5 | `risk_monitor.py` | Drawdown, daily-loss, loss-streak and concentration alerts, plus historical replay of when each would have fired | Risk rules should be explicit and testable |
@@ -25,6 +51,8 @@ python -m pytest                # 28 tests
 - **Secrets:** read only from environment variables, masked in `repr`, redacted from logs.
 
 ## Honest limitations
+- Built-in strategies are deliberately simple (long/flat, one asset at a time) so the verdicts are easy to interpret.
+- The Yahoo Finance loader depends on the third-party `yfinance` package; if it fails, export prices to CSV and use `--csv`.
 - Demo data is **synthetic**. Results on it prove the code works, not that any strategy makes money. Plug in your own return series with `data.load_returns_csv`.
 - The ranking `score` is a heuristic (deflated PSR minus a penalty per flag), not a theorem. Thresholds (0.98 smoothness, 5% bootstrap tail, CUSUM k=0.5, h=5) are defensible defaults, not tuned values.
 - The deflated Sharpe assumes roughly independent trials and treats the cross-sectional Sharpe variance as the trial variance; real strategy searches are messier.

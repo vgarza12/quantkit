@@ -28,14 +28,22 @@ def bootstrap_sharpe_dist(backtest, length: int, ppy: int = 252, n_boot: int = 2
     idx = (starts[:, :, None] + np.arange(block)).reshape(n_boot, -1)[:, :length]
     samples = x[idx]
     sd = samples.std(axis=1, ddof=1)
-    return np.where(sd > 0, samples.mean(axis=1) / sd * np.sqrt(ppy), np.nan)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return np.where(sd > 0, samples.mean(axis=1) / sd * np.sqrt(ppy), np.nan)
 
 
-def cusum_alarm(live, bt_mean: float, bt_std: float, k: float = 0.5, h: float = 5.0):
+def cusum_alarm(live, bt_mean: float, bt_std: float, k: float = 0.5, h: float = 10.0):
     """One-sided (downward) CUSUM on standardized live returns.
 
     Returns the index position of the first alarm, or None.
+
+    Honest caveat: on daily data this only catches LARGE sudden breakdowns
+    (shifts of about one daily standard deviation). Gradual decay is far too
+    small to see this way, which is why the verdict below relies on the
+    bootstrap percentile and treats CUSUM as an extra warning signal.
     """
+    if not np.isfinite(bt_std) or bt_std <= 0:
+        return None                      # backtest never varied (e.g. never traded): nothing to standardize by
     z = (pd.Series(live).dropna().to_numpy() - bt_mean) / bt_std
     s = 0.0
     for i, zi in enumerate(z):
@@ -50,11 +58,16 @@ def compare(backtest, live, ppy: int = 252, n_boot: int = 2000, block: int = 10,
     lv = pd.Series(live).dropna()
     live_sr = m.sharpe(lv, ppy)
     dist = bootstrap_sharpe_dist(bt, len(lv), ppy, n_boot, block, seed)
+    if not np.isfinite(live_sr):
+        return {"backtest_sharpe": m.sharpe(bt, ppy), "live_sharpe": live_sr, "live_percentile_vs_backtest": float("nan"),
+                "cusum_alarm_index": None, "cusum_alarm_date": None, "verdict": "no_data",
+                "caveat": "Live returns had no variation (no trades?), so there is nothing to compare."}
     pct = float(np.nanmean(dist <= live_sr))
     alarm = cusum_alarm(lv, bt.mean(), bt.std(ddof=1))
-    if pct < 0.05 or alarm is not None:
+    # Verdict uses the bootstrap percentile only. A CUSUM alarm escalates "consistent" to "watch".
+    if pct < 0.05:
         verdict = "decayed"
-    elif pct < 0.15:
+    elif pct < 0.15 or alarm is not None:
         verdict = "watch"
     else:
         verdict = "consistent"

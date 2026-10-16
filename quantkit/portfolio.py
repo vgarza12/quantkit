@@ -33,7 +33,7 @@ def equal_weight(R: pd.DataFrame) -> np.ndarray:
 
 
 def inverse_vol(R: pd.DataFrame) -> np.ndarray:
-    iv = 1 / R.std(ddof=1).to_numpy()
+    iv = 1 / np.maximum(R.std(ddof=1).to_numpy(), 1e-12)
     return iv / iv.sum()
 
 
@@ -57,7 +57,7 @@ def max_sharpe(R: pd.DataFrame) -> np.ndarray:
     S = _shrunk_cov(R)
     mu = R.mean().to_numpy()
     mu = 0.5 * mu + 0.5 * mu.mean()
-    return _solve(lambda w: -(w @ mu) / np.sqrt(w @ S @ w), R.shape[1])
+    return _solve(lambda w: -(w @ mu) / np.sqrt(max(w @ S @ w, 1e-18)), R.shape[1])
 
 
 METHODS = {

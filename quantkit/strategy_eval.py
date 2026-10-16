@@ -42,7 +42,7 @@ def smoothness(r) -> float:
     """R^2 of log-equity vs time. Real strategies are bumpy; ~1.0 is suspicious."""
     eq = np.log(m.equity_curve(r).to_numpy())
     t = np.arange(len(eq))
-    if len(eq) < 3:
+    if len(eq) < 3 or np.ptp(eq) == 0:
         return float("nan")
     return float(np.corrcoef(t, eq)[0, 1] ** 2)
 
