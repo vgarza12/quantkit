@@ -24,7 +24,7 @@ def test_missing_secret_fails_loudly():
 
 
 def test_scanner_finds_hardcoded_key(tmp_path):
-    (tmp_path / "bad.py").write_text('api_key = "AKIAABCDEFGHIJKLMNOP1234"\n')
+    (tmp_path / "bad.py").write_text('api_key = "' + "X" * 20 + '"\n')
     (tmp_path / "ok.py").write_text('api_key = os.environ["QK_API_KEY"]\n')
     hits = scan_for_secrets(str(tmp_path))
     assert len(hits) == 1 and hits[0][0].endswith("bad.py")
