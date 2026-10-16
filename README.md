@@ -6,7 +6,7 @@ Six small, tested tools that answer one question a systematic trading team keeps
 ```
 pip install -r requirements.txt
 python examples/run_demo.py     # all six on synthetic data, no data subscription needed
-python -m pytest                # 41 tests
+python -m pytest                # 45 tests
 ```
 
 ## The report card (start here)
@@ -55,7 +55,7 @@ A green verdict means "worth testing further", never "safe to trade".
 - Built-in strategies are deliberately simple (long/flat, one asset at a time) so the verdicts are easy to interpret.
 - The Yahoo Finance loader depends on the third-party `yfinance` package; if it fails, export prices to CSV and use `--csv`.
 - Demo data is **synthetic**. Results on it prove the code works, not that any strategy makes money. Plug in your own return series with `data.load_returns_csv`.
-- The ranking `score` is a heuristic (deflated PSR minus a penalty per flag), not a theorem. Thresholds (0.98 smoothness, 5% bootstrap tail, CUSUM k=0.5, h=5) are defensible defaults, not tuned values.
+- The ranking `score` is a heuristic (deflated PSR minus a penalty per flag), not a theorem. Thresholds (smoothness above 0.98 combined with Sharpe above 2.5, 5% bootstrap tail, CUSUM k=0.5 and h=10, a 0.1 Sharpe margin over just holding) are defensible defaults, not tuned values.
 - The deflated Sharpe assumes roughly independent trials and treats the cross-sectional Sharpe variance as the trial variance; real strategy searches are messier.
 - Bootstrap decay tests have low power on short live windows. "watch" means look closer, not act.
 - Slippage modeling is descriptive (from logged fills), not a market-impact model.
