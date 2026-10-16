@@ -14,6 +14,8 @@ python -m pytest                # 45 tests
 One command turns a price history into a single plain-English web page: a green / yellow / red verdict,
 seven checks explained in everyday language, and two charts. No statistics background needed to read it.
 
+![Sample report card](docs/report.png)
+
 ```
 python -m quantkit demo --open                              # offline, synthetic prices
 python -m quantkit report --tickers SPY QQQ --open          # real prices (pip install yfinance first)
